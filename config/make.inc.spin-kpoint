@@ -1,0 +1,129 @@
+#/usr/bin/bash
+
+COMPILE_MODE     = release
+#COMPILE_MODE     = debug
+USE_COMPLEX      = 0
+USE_OPENMP       = 0
+USE_PROFILE      = 0
+USE_PEXSI        = 0
+USE_GPU          = 1
+
+ifeq (${COMPILE_MODE}, release)
+  COMPILE_DEF    = -DRELEASE
+#  COMPILE_FLAG   = -fast -w -D GPUDIRECT -no-ipo
+  COMPILE_FLAG   = -O0 -w -g 
+endif
+ifeq (${COMPILE_MODE}, debug)
+  COMPILE_DEF    = -DDEBUG=1
+  COMPILE_FLAG   = -O2 -w -g 
+endif
+
+ifeq (${USE_GPU}, 1)
+  NVCC = nvcc
+  CUDA_FLAG = -I/usr/local/cuda-11/include -D GPU -I/raid/home/yaoyf/software/pwdft-lib/magma-2.5.4/include
+  CUDA_LIB = -L/usr/local/cuda-11/lib64 -lcufft -lcublas -lcudart -lcuda -lcusolver # -lmagma #-lmagma_sparse #-lcudadevrt
+  NVCCFLAG = -gencode arch=compute_70,code=sm_70 -DGPU -I ../include  -I /usr/local/cuda/include
+endif
+
+ifeq (${USE_COMPLEX}, 1)
+  SCALAR_DEF    = -DCOMPLEXSCALAR -DCPX
+endif
+
+
+ifeq (${USE_OPENMP}, 1)
+  OPENMP_DEF   = -DOPENMP
+	OPENMP_FLAG  = -fopenmp
+endif
+
+ifeq (${USE_PROFILE}, 1)
+	PROFILE_FLAG  = -g -pg
+endif
+
+ifeq (${USE_PEXSI}, 1)
+  PEXSI_DEF        = -DPEXSI
+
+  PEXSI_DIR        = 
+  DSUPERLU_DIR     = 
+  METIS_DIR        = 
+  SCOTCH_DIR       = 
+
+  PEXSI_INCLUDE    = 
+  PEXSI_SRC_LIB    = 
+  DSUPERLU_LIB     = 
+  SCOTCH_LIB       = 
+  METIS_LIB        = 
+  PEXSI_LIB        = 
+  PEXSI_LIB        = 
+endif
+
+# inclues
+DGDFT_INCLUDE    = -I${DGDFT_DIR}/include 
+LIBXC_INCLUDE    = -I$(LIBXC_DIR)/include
+LIBXC_INCLUDE    = -I$(LIBXC_DIR)/include
+MPI_INCLUDE      = -I/raid/home/fengjw/intel/oneapi/mpi/latest/include
+FFTW_INCLUDE     = -I${FFTW_DIR}/include  -I/usr/local/cuda/include
+YAML_INCLUDE     = -I$(YAML_DIR)/include
+INCLUDES         = ${DGDFT_INCLUDE} ${PEXSI_INCLUDE} ${LIBXC_INCLUDE} ${BLOPEX_INCLUDE} ${FFTW_INCLUDE} ${HIPCC_INC} ${YAML_INCLUDE} ${MPI_INCLUDE}
+
+# Libraries
+LIBXC_LIB        = $(LIBXC_DIR)/lib/libxc.a
+FFTW_LIB         = -L${FFTW_DIR}/lib -lfftw3_mpi -lfftw3 -lm
+MKL_LIB          = -L${MKL_ROOT}/lib/intel64 -lmkl_core -lmkl_intel_lp64  -lmkl_sequential -lmkl_blacs_intelmpi_lp64  -lmkl_scalapack_lp64 -lpthread #-lgfortran
+#GFORTRAN_LIB     = -lgfortran
+GFORTRAN_LIB    =-lifcore
+YAML_LIB         = $(YAML_DIR)/lib64/libyaml-cpp.a
+DGDFT_LIB        = ${DGDFT_DIR}/src/libpwdft.a
+RQRCP_LIB        = ${DGDFT_DIR}/external/rqrcp/librqrcp.a
+LBFGS_LIB        = ${DGDFT_DIR}/external/lbfgs/liblbfgs.a
+LIBS             = ${DGDFT_LIB} ${PEXSI_LIB} ${LIBXC_LIB} ${GFORTRAN_LIB} ${BLOPEX_LIB} ${LBFGS_LIB} ${RQRCP_LIB} ${FFTW_LIB} ${MKL_LIB} ${YAML_LIB} ${IPM} ${HIP_LIB} ${CUDA_LIB} -lifcore
+
+CC	= mpiicc
+CXX	= mpiicpc
+FC	= ifort
+LOADER	= mpiicpc
+
+AR           = ar
+ARFLAGS      = rvcu
+# For System V based machine without ranlib, like Cray and SGI,
+# use touch instead.
+#RANLIB      = touch
+RANLIB       = ranlib
+
+RM           = rm
+RMFLAGS      = -f
+
+# Different compiling and linking options.
+#
+
+
+CFLAGS       = ${COMPILE_FLAG} ${OPENMP_FLAG} ${PROFILE_FLAG} ${INCLUDES} ${CUDA_FLAG} ${HIP_FLAG}
+FFLAGS       = ${COMPILE_FLAG} ${OPENMP_FLAG} ${PROFILE_FLAG} ${INCLUDES} ${CUDA_FLAG} #${HIP_FLAG}
+CXXFLAGS     = ${COMPILE_FLAG} ${OPENMP_FLAG} ${PROFILE_FLAG} ${INCLUDES} ${CUDA_FLAG} ${HIP_FLAG} -std=c++11 #-fpermissive
+CCDEFS       = ${COMPILE_DEF} ${PEXSI_DEF} ${SCALAR_DEF} ${OPENMP_DEF}
+CPPDEFS      = ${COMPILE_DEF} ${PEXSI_DEF} ${SCALAR_DEF} ${OPENMP_DEF}
+LOADOPTS     = ${OPENMP_FLAG} ${PROFILE_FLAG} ${LIBS} 
+
+
+# Compilation replacement rules
+
+%.o: %.c
+	${CC} -c ${CFLAGS} ${CCDEFS} $< 
+%.o: %.cpp
+	${CXX} -c ${CXXFLAGS} ${CPPDEFS} $< 
+%.o: %.f
+	${FC} -c ${FFLAGS} $<
+%.o: %.F
+	${FC} -c ${FFLAGS} $<
+%.o: %.f90
+	${FC} -c ${FFLAGS} $<
+%.o: %.F90
+	${FC} -c ${FFLAGS} $<
+%.o: %.cu
+	$(NVCC) -c ${NVCCFLAG} $<
+
+# Generate auto-dependencies (for cpp files now)
+%.d: %.cpp
+	@set -e; rm -f $@; \
+	$(CXX) -M $(CXXFLAGS) $< > $@.$$$$; \
+	sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@;\
+	rm -f $@.$$$$
