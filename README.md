@@ -1,1 +1,24 @@
-# pwdft_develop
+
+To install PWDFT, do
+
+  (1) cp /build/make.inc.spin-kpoints ./make.inc
+
+  (2) modify the path of libraries in env.sh and make.inc
+
+      set USE_GPU as 1 to compile GPU version
+
+      set USE_COMPLEX as 1 to compile complex version
+
+      USE_GPU and USE_COMPLEX are not compatible by now
+
+  (3) source env.sh
+
+  (3) sh compile.sh
+
+Then
+
+  the executable file is generated in /examples as pwdft
+
+To learn how to use PWDFT, please refer to the examples in
+
+  /test/Final and read README in /test
